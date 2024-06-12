@@ -7,20 +7,29 @@ from sklearn.neighbors import KNeighborsClassifier
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 from sklearn import metrics
 import joblib
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-# Load dataset
 df = pd.read_excel('B9_winequality-white.xlsx')
 
-# Convert non-numeric values to NaN and fill NaN with column mean
 for col in df.columns:
     df[col] = pd.to_numeric(df[col], errors='coerce')
     df[col] = df[col].fillna(df[col].mean())
 
+df.hist(bins=20, figsize=(15, 10))
+plt.suptitle('Histogramele Caracteristicilor')
+plt.show()
 
-# Outlier treatment using IQR
+plt.figure(figsize=(12, 10))
+correlation_matrix = df.corr()
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
+plt.title('Matricea de Corelație')
+plt.show()
+
 def remove_outliers(df, column):
     Q1 = df[column].quantile(0.25)
     Q3 = df[column].quantile(0.75)
@@ -30,29 +39,27 @@ def remove_outliers(df, column):
     df = df[(df[column] >= lower_bound) & (df[column] <= upper_bound)]
     return df
 
-
 for col in df.columns:
     if col != 'quality':
         df = remove_outliers(df, col)
 
-# Create binary target variable 'best quality'
 df['best quality'] = [1 if x > 5 else 0 for x in df.quality]
 
-# Separate features and target
 features = df.drop(['quality', 'best quality'], axis=1)
 target = df['best quality']
 
-# Standardize the features
 scaler = StandardScaler()
 features_scaled = scaler.fit_transform(features)
 
-# Save the scaler
+# Aplicarea PCA pentru reducerea dimensionalității
+pca = PCA(n_components=0.95)  # Păstrăm 95% din variația totală
+features_pca = pca.fit_transform(features_scaled)
+
 joblib.dump(scaler, 'scaler.pkl')
+joblib.dump(pca, 'pca.pkl')
 
-# Split the data into training and test sets
-xtrain, xtest, ytrain, ytest = train_test_split(features_scaled, target, test_size=0.2, random_state=40)
+xtrain, xtest, ytrain, ytest = train_test_split(features_pca, target, test_size=0.2, random_state=40)
 
-# Define the models to be evaluated
 models = [
     LogisticRegression(),
     SVC(kernel='rbf'),
@@ -63,7 +70,6 @@ models = [
     KNeighborsClassifier()
 ]
 
-# Evaluate each model with hyperparameter tuning
 best_model = None
 best_score = 0
 for model in models:
